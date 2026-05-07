@@ -18,10 +18,10 @@ pipeline {
         SONAR_PROJECT_KEY  = "notas-universitarias"
         SONAR_PROJECT_NAME = "Sistema de Notas Universitarias"
 
-        // URL del contenedor SonarQube 
-        // Para Windows: usar host.docker.internal
-        // Para Linux: usar localhost o la IP del contenedor
-        SONAR_HOST_URL = "http://host.docker.internal:9000"
+        // URL del contenedor SonarQube (nombre del contenedor en la red Docker)
+        // Si corriste SonarQube con --name sonarqube y red calidad-net,
+        // Jenkins lo alcanza por http://mi-sonarqube:9000
+        SONAR_HOST_URL = "http://con_sonarqube:9000"
 
         // Directorio donde se guardarán los reportes de cobertura
         REPORTS_DIR = "reports"
@@ -119,7 +119,6 @@ pipeline {
                         sonar-scanner \\
                             -Dsonar.projectKey=${SONAR_PROJECT_KEY} \\
                             -Dsonar.projectName="${SONAR_PROJECT_NAME}" \\
-                            -Dsonar.token=${SONAR_TOKEN} \\
                             -Dsonar.projectVersion=1.0 \\
                             -Dsonar.sources=src \\
                             -Dsonar.tests=tests \\
