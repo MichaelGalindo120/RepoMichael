@@ -21,7 +21,7 @@ pipeline {
         // URL del contenedor SonarQube (nombre del contenedor en la red Docker)
         // Si corriste SonarQube con --name sonarqube y red calidad-net,
         // Jenkins lo alcanza por http://mi-sonarqube:9000
-        SONAR_HOST_URL = "http://mi-sonarqube:9000"
+        SONAR_HOST_URL = "http://con_sonarqube:9000"
 
         // Directorio donde se guardarán los reportes de cobertura
         REPORTS_DIR = "reports"
