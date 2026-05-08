@@ -23,6 +23,7 @@ pipeline {
         // Jenkins lo alcanza por http://mi-sonarqube:9000
         SONAR_HOST_URL = "http://sonarqube:9000"
 
+
         // Directorio donde se guardarán los reportes de cobertura
         REPORTS_DIR = "reports"
 
@@ -92,7 +93,7 @@ pipeline {
 
                     # Instala las dependencias listadas en requirements.txt
                     # --no-cache-dir evita problemas de disco en contenedores
-                    pip3 install --no-cache-dir -r requirements.txt
+                    pip3 install --break-system-packages --no-cache-dir -r requirements.txt
 
                     # Crea la carpeta de reportes si no existe
                     mkdir -p ${REPORTS_DIR}
@@ -146,7 +147,7 @@ pipeline {
                 echo " Enviando código a SonarQube..."
                 echo "============================================"
 
-                // withSonarQubeEnv usa las credenciales configuradas
+                // withSonarQubeEnv usa alas credenciales configuradas
                 // en Jenkins → Manage Jenkins → Configure System → SonarQube
                 withSonarQubeEnv("SonarQube") {
                     sh """
