@@ -22,7 +22,7 @@ pipeline {
         // Si corriste SonarQube con --name sonarqube y red calidad-net,
 
         // Jenkins lo alcanza
-        SONAR_HOST_URL = "http://sonarqube:9000"
+        SONAR_HOST_URL = "http://misonarqube:9000"
         // Directorio donde se guardarán los reportes de cobertura
         REPORTS_DIR = "reports"
 
