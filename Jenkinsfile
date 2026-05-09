@@ -37,7 +37,7 @@ pipeline {
 
     // ── OPCIONES DEL PIPELINE ───────────────────────────────
     options {
-        buildDiscarder(logRotator(numToKeepStr: "5"))
+        buildDiscarder(logRotator(numToKeepStr: "8"))
         timeout(time: 10, unit: "MINUTES")
         timestamps()
         disableConcurrentBuilds()
