@@ -146,7 +146,7 @@ pipeline {
                 echo " Verificando Quality Gate de SonarQube..."
                 echo "============================================"
 
-                timeout(time: 5, unit: "MINUTES") {
+                timeout(time: 8, unit: "MINUTES") {
                     waitForQualityGate abortPipeline: true
                 }
             }
