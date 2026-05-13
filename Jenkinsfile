@@ -37,8 +37,8 @@ pipeline {
 
     // ── OPCIONES DEL PIPELINE ───────────────────────────────
     options {
-        buildDiscarder(logRotator(numToKeepStr: "8"))
-        timeout(time: 10, unit: "MINUTES")
+        buildDiscarder(logRotator(numToKeepStr: "5"))
+        timeout(time: 5, unit: "MINUTES")
         timestamps()
         disableConcurrentBuilds()
     }
@@ -146,7 +146,7 @@ pipeline {
                 echo " Verificando Quality Gate de SonarQube..."
                 echo "============================================"
 
-                timeout(time: 8, unit: "MINUTES") {
+                timeout(time: 5, unit: "MINUTES") {
                     waitForQualityGate abortPipeline: true
                 }
             }
