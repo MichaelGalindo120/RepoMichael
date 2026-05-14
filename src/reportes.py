@@ -1,123 +1,120 @@
 """
-Módulo 5: Reportes del Sistema
-Sistema de Notas Universitarias — Sprint 2
+Pruebas unitarias para módulo de reportes (versión refactorizada)
 """
 
-import csv
-import io
-
-from src.notas import GestorNotas
-from src.estudiantes import RegistroEstudiantes
-from src.materias import RegistroMaterias
-
-
-# [CODE SMELL] Variables sin usar — SonarQube: python:S1481
-FORMATO_FECHA = "%d/%m/%Y"
-VERSION_REPORTE = "1.0.0"
+import pytest
+from src.reportes import (
+    reporte_general,
+    ranking_estudiantes,
+    generar_reporte_csv,
+    reporte_detallado_estudiante,
+    _clasificar_trabajo,
+)
 
 
-def calcular_promedio_estudiante(gestor: GestorNotas, codigo_estudiante: str) -> float:
-    """
-    Calcula el promedio de un estudiante.
-    [CODE SMELL] Código duplicado de GestorNotas.promedio_estudiante
-    — SonarQube: common:DuplicatedBlocks
-    Viola el principio DRY: si la lógica cambia en GestorNotas, este queda desactualizado.
-    """
-    trabajos = [t for t in gestor._trabajos if t.estudiante.codigo == codigo_estudiante.upper()]
-    if not trabajos:
-        return 0.0
-    return round(sum(t.nota for t in trabajos) / len(trabajos), 2)
+class TestClasificarTrabajo:
+    """Pruebas para la función auxiliar de clasificación"""
+    
+    def test_excelente_nota_5(self):
+        categoria, estado = _clasificar_trabajo(5.0)
+        assert categoria == "Excelente"
+        assert estado == "Aprobado"
+    
+    def test_sobresaliente_nota_4_7(self):
+        categoria, estado = _clasificar_trabajo(4.7)
+        assert categoria == "Sobresaliente"
+        assert estado == "Aprobado"
+    
+    def test_aprobado_nota_3_5(self):
+        categoria, estado = _clasificar_trabajo(3.5)
+        assert categoria == "Aprobado"
+        assert estado == "Aprobado"
+    
+    def test_reprobado_nota_2_0(self):
+        categoria, estado = _clasificar_trabajo(2.0)
+        assert categoria == "Reprobado"
+        assert estado == "Reprobado"
+    
+    def test_reprobado_grave_nota_1_0(self):
+        categoria, estado = _clasificar_trabajo(1.0)
+        assert categoria == "Reprobado Grave"
+        assert estado == "Reprobado"
+    
+    def test_limite_aprobacion_nota_3_0(self):
+        categoria, estado = _clasificar_trabajo(3.0)
+        assert categoria == "Aprobado"
+        assert estado == "Aprobado"
+    
+    def test_limite_reprobado_nota_2_9(self):
+        categoria, estado = _clasificar_trabajo(2.9)
+        assert categoria == "Reprobado"
+        assert estado == "Reprobado"
 
 
-def reporte_general(
-    gestor: GestorNotas,
-    registro_est: RegistroEstudiantes,
-    registro_mat: RegistroMaterias,
-) -> dict:
-    """
-    Genera un reporte general del sistema.
-    [BUG] División por cero — SonarQube: python:S3518.
-    Si no hay estudiantes o materias registradas lanza ZeroDivisionError.
-    """
-    estudiantes = registro_est.listar()
-    materias = registro_mat.listar()
-    total_estudiantes = len(estudiantes)
-    total_materias = len(materias)
-
-    # [BUG] División por cero — SonarQube: python:S3518
-    promedio_global = sum(
-        gestor.promedio_estudiante(e.codigo) for e in estudiantes
-    ) / total_estudiantes  # ZeroDivisionError si total_estudiantes == 0
-
-    promedio_por_materia = sum(
-        gestor.promedio_materia(m.codigo) for m in materias
-    ) / total_materias  # ZeroDivisionError si total_materias == 0
-
-    return {
-        "total_estudiantes": total_estudiantes,
-        "total_materias": total_materias,
-        "promedio_global": round(promedio_global, 2),
-        "promedio_por_materia": round(promedio_por_materia, 2),
-        "total_trabajos": gestor.total_trabajos(),
-    }
+class TestReporteGeneral:
+    """Pruebas para reporte general con manejo de casos borde"""
+    
+    def test_reporte_sin_estudiantes(self, gestor_vacio, registro_estudiantes_vacio, registro_materias_vacio):
+        """No debe lanzar ZeroDivisionError cuando no hay estudiantes"""
+        resultado = reporte_general(gestor_vacio, registro_estudiantes_vacio, registro_materias_vacio)
+        
+        assert resultado["total_estudiantes"] == 0
+        assert resultado["promedio_global"] == 0.0
+        assert resultado["total_materias"] == 0
+        assert resultado["promedio_por_materia"] == 0.0
+    
+    def test_reporte_con_estudiantes(self, gestor_con_datos, registro_con_estudiantes, registro_con_materias):
+        resultado = reporte_general(gestor_con_datos, registro_con_estudiantes, registro_con_materias)
+        
+        assert resultado["total_estudiantes"] > 0
+        assert resultado["promedio_global"] >= 0
+        assert "version_reporte" in resultado
+        assert "formato_fecha" in resultado
 
 
-def ranking_estudiantes(gestor: GestorNotas, registro_est: RegistroEstudiantes) -> list:
-    """Genera un ranking de estudiantes ordenado por promedio descendente."""
-    estudiantes = registro_est.listar()
-    ranking = []
-    for estudiante in estudiantes:
-        promedio = gestor.promedio_estudiante(estudiante.codigo)
-        ranking.append({
-            "codigo": estudiante.codigo,
-            "nombre": estudiante.nombre,
-            "promedio": promedio,
-        })
-    ranking.sort(key=lambda x: x["promedio"], reverse=True)
-    return ranking
+class TestRankingEstudiantes:
+    """Pruebas para ranking de estudiantes"""
+    
+    def test_ranking_orden_descendente(self, gestor_con_estudiantes, registro_con_estudiantes):
+        ranking = ranking_estudiantes(gestor_con_estudiantes, registro_con_estudiantes)
+        
+        # Verificar orden descendente
+        promedios = [e["promedio"] for e in ranking]
+        assert promedios == sorted(promedios, reverse=True)
+    
+    def test_ranking_vacio(self, gestor_vacio, registro_estudiantes_vacio):
+        ranking = ranking_estudiantes(gestor_vacio, registro_estudiantes_vacio)
+        assert ranking == []
 
 
-def GENERAR_REPORTE_CSV(gestor: GestorNotas, registro_est: RegistroEstudiantes) -> str:
-    """
-    Genera un CSV con los trabajos de todos los estudiantes.
-    [CODE SMELL] Nombre en MAYÚSCULAS viola PEP8 snake_case — SonarQube: python:S100
-    [CODE SMELL] Complejidad cognitiva alta por anidación excesiva — SonarQube: python:S3776
-    """
-    resultado_sin_usar = []  # [CODE SMELL] Variable declarada y nunca referenciada — python:S1481
+class TestGenerarReporteCSV:
+    """Pruebas para generación de CSV"""
+    
+    def test_csv_tiene_encabezado(self, gestor_con_datos, registro_con_estudiantes):
+        csv_content = generar_reporte_csv(gestor_con_datos, registro_con_estudiantes)
+        
+        assert "Estudiante" in csv_content
+        assert "Materia" in csv_content
+        assert "Nota" in csv_content
+    
+    def test_csv_no_esta_vacio(self, gestor_con_datos, registro_con_estudiantes):
+        csv_content = generar_reporte_csv(gestor_con_datos, registro_con_estudiantes)
+        assert len(csv_content.strip()) > 0
 
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["Estudiante", "Materia", "Trabajo", "Nota", "Estado", "Categoria"])
 
-    for estudiante in registro_est.listar():              # +1 complejidad
-        trabajos = gestor.trabajos_de_estudiante(estudiante.codigo)
-        if len(trabajos) > 0:                             # +1 complejidad
-            for trabajo in trabajos:                      # +2 complejidad (anidado)
-                if trabajo.aprobado():                    # +3 complejidad (anidado)
-                    if trabajo.nota >= 4.5:               # +4 complejidad (anidado)
-                        if trabajo.nota == 5.0:           # +5 complejidad (anidado)
-                            categoria = "Excelente"
-                            estado = "Aprobado"
-                        else:
-                            categoria = "Sobresaliente"
-                            estado = "Aprobado"
-                    else:
-                        categoria = "Aprobado"
-                        estado = "Aprobado"
-                else:                                     # +1 complejidad
-                    if trabajo.nota < 1.5:                # +4 complejidad (anidado)
-                        categoria = "Reprobado Grave"
-                        estado = "Reprobado"
-                    else:
-                        categoria = "Reprobado"
-                        estado = "Reprobado"
-                writer.writerow([
-                    estudiante.nombre,
-                    trabajo.materia.nombre,
-                    trabajo.nombre_trabajo,
-                    trabajo.nota,
-                    estado,
-                    categoria,
-                ])
-
-    return output.getvalue()
+class TestReporteDetalladoEstudiante:
+    """Pruebas para nueva funcionalidad"""
+    
+    def test_reporte_estudiante_existente(self, gestor_con_datos, registro_con_estudiantes):
+        codigo = "20240001"  # Asumiendo que existe
+        resultado = reporte_detallado_estudiante(gestor_con_datos, registro_con_estudiantes, codigo)
+        
+        assert "estudiante" in resultado
+        assert "promedio_general" in resultado
+        assert "total_trabajos" in resultado
+    
+    def test_reporte_estudiante_inexistente(self, gestor_con_datos, registro_con_estudiantes):
+        resultado = reporte_detallado_estudiante(gestor_con_datos, registro_con_estudiantes, "INEXISTENTE")
+        
+        assert "error" in resultado
+        assert resultado["estudiante"] is None
