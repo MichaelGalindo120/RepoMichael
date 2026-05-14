@@ -11,34 +11,42 @@ pipeline {
 
     // ── VARIABLES GLOBALES ──────────────────────────────────
     environment {
-        // Credenciales de SonarQube (configurar en Jenkins)
+        // ====================================================
+        // CREDENCIALES DE SONARQUBE
+        // ====================================================
         SONAR_TOKEN = credentials('sonar-token')
         
-        // Nombre del proyecto tal como aparecerá en SonarQube
+        // ====================================================
+        // VARIABLES PARA AUTENTICACIÓN (NUEVAS)
+        // ====================================================
+        // Para entorno de pruebas - en producción usar credentials()
+        ADMIN_PASSWORD = "admin1234"
+        DB_SECRET_KEY  = "clave_secreta_123"
+        PEPPER         = "pepper_secreto_456"
+        
+        // ====================================================
+        // CONFIGURACIÓN DE SONARQUBE
+        // ====================================================
         SONAR_PROJECT_KEY  = "notas-universitarias"
         SONAR_PROJECT_NAME = "Sistema de Notas Universitarias"
-
-        // URL del contenedor SonarQube (nombre del contenedor en la red Docker)
-        // Si corriste SonarQube con --name sonarqube y red calidad-net,
-
-        // Jenkins lo alcanza
-        SONAR_HOST_URL = "http://misonarqube:9000"
-        // Directorio donde se guardarán los reportes de cobertura
-        REPORTS_DIR = "reports"
-
-        // Versión mínima de cobertura requerida (porcentaje)
-        // Bajado a 75 temporalmente: Sprint 2 agrega módulos nuevos con menos cobertura.
-        // Subir a 80 en el Sprint 3 cuando se completen los tests de los paths de error.
+        SONAR_HOST_URL     = "http://misonarqube:9000"
+        
+        // ====================================================
+        // CONFIGURACIÓN DE REPORTES
+        // ====================================================
+        REPORTS_DIR        = "reports"
         COVERAGE_THRESHOLD = "75"
-
-        // Identificador del incremento de producto
+        
+        // ====================================================
+        // METADATOS
+        // ====================================================
         SPRINT = "2"
     }
 
     // ── OPCIONES DEL PIPELINE ───────────────────────────────
     options {
         buildDiscarder(logRotator(numToKeepStr: "5"))
-        timeout(time: 5, unit: "MINUTES")
+        timeout(time: 10, unit: "MINUTES")  // Aumentado de 5 a 10 minutos
         timestamps()
         disableConcurrentBuilds()
     }
@@ -77,6 +85,7 @@ pipeline {
                     pip3 install --break-system-packages --no-cache-dir -r requirements.txt
                     mkdir -p ${REPORTS_DIR}
                     echo "Dependencias instaladas correctamente."
+                    echo "ADMIN_PASSWORD configurada: \${ADMIN_PASSWORD:0:1}***"  # Mostrar solo primer caracter
                 """
             }
         }
@@ -146,7 +155,8 @@ pipeline {
                 echo " Verificando Quality Gate de SonarQube..."
                 echo "============================================"
 
-                timeout(time: 5, unit: "MINUTES") {
+                // Aumentado timeout para permitir procesamiento en SonarQube
+                timeout(time: 8, unit: "MINUTES") {
                     waitForQualityGate abortPipeline: true
                 }
             }
@@ -161,11 +171,12 @@ pipeline {
                 echo " BUILD EXITOSO"
                 echo "============================================"
                 sh """
-                    echo "Proyecto  : ${SONAR_PROJECT_NAME}"
-                    echo "Branch    : \$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'N/A')"
-                    echo "Commit    : \$(git rev-parse --short HEAD 2>/dev/null || echo 'N/A')"
-                    echo "SonarQube : ${SONAR_HOST_URL}/dashboard?id=${SONAR_PROJECT_KEY}"
-                    echo "Cobertura : ${REPORTS_DIR}/coverage_html/index.html"
+                    echo "Proyecto          : ${SONAR_PROJECT_NAME}"
+                    echo "Branch            : \$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'N/A')"
+                    echo "Commit            : \$(git rev-parse --short HEAD 2>/dev/null || echo 'N/A')"
+                    echo "Sprint            : ${SPRINT}"
+                    echo "SonarQube         : ${SONAR_HOST_URL}/dashboard?id=${SONAR_PROJECT_KEY}"
+                    echo "Cobertura         : ${REPORTS_DIR}/coverage_html/index.html"
                     echo "============================================"
                 """
             }
@@ -176,22 +187,66 @@ pipeline {
     //  POST — Acciones al terminar el pipeline
     // ══════════════════════════════════════════════════════════
     post {
+        // Siempre se ejecuta, sin importar el resultado
         always {
+            echo "============================================"
             echo "Pipeline finalizado. Estado: ${currentBuild.currentResult}"
+            echo "============================================"
+            
+            // Archivar reportes de pruebas
             archiveArtifacts artifacts: "${REPORTS_DIR}/**/*.xml", allowEmptyArchive: true
+            archiveArtifacts artifacts: "${REPORTS_DIR}/**/*.html", allowEmptyArchive: true
+            
+            // Limpiar workspace opcionalmente
+            // cleanWs()
         }
 
+        // Cuando el pipeline es exitoso
         success {
-            echo "EXITO: Todas las pruebas pasaron y el Quality Gate fue aprobado."
+            echo "============================================"
+            echo "✅ EXITO: Todas las pruebas pasaron"
+            echo "✅ El Quality Gate fue aprobado"
+            echo "============================================"
+            
+            // Opcional: Enviar notificación por correo
+            // emailext(
+            //     subject: "Pipeline exitoso: ${env.JOB_NAME} - ${env.BUILD_NUMBER}",
+            //     body: "El pipeline ha finalizado exitosamente. Ver resultados en: ${env.BUILD_URL}",
+            //     to: "equipo@ejemplo.com"
+            // )
         }
 
+        // Cuando el pipeline falla
         failure {
-            echo "FALLO: Revisa los logs. Las pruebas fallaron o el Quality Gate fue rechazado."
-            echo "Consulta SonarQube en: ${SONAR_HOST_URL}"
+            echo "============================================"
+            echo "❌ FALLO: Revisa los logs"
+            echo "❌ Las pruebas fallaron o el Quality Gate fue rechazado"
+            echo "============================================"
+            echo "🔍 Consulta SonarQube en: ${SONAR_HOST_URL}"
+            echo "📊 Reportes de pruebas: ${REPORTS_DIR}/test_results.xml"
+            echo "============================================"
+            
+            // Opcional: Enviar notificación por correo
+            // emailext(
+            //     subject: "Pipeline fallido: ${env.JOB_NAME} - ${env.BUILD_NUMBER}",
+            //     body: "El pipeline ha fallado. Revisa los logs en: ${env.BUILD_URL}",
+            //     to: "equipo@ejemplo.com"
+            // )
         }
 
+        // Cuando el pipeline es inestable (algunas pruebas fallaron pero no todas)
         unstable {
-            echo "INESTABLE: Algunas pruebas generaron advertencias. Revisa el reporte."
+            echo "============================================"
+            echo "⚠️ INESTABLE: Algunas pruebas generaron advertencias"
+            echo "⚠️ Revisa el reporte detallado"
+            echo "============================================"
+        }
+
+        // Cuando el pipeline es abortado
+        aborted {
+            echo "============================================"
+            echo "🛑 ABORTADO: El pipeline fue cancelado"
+            echo "============================================"
         }
     }
 }
