@@ -17,9 +17,8 @@ pipeline {
         SONAR_TOKEN = credentials('sonar-token')
         
         // ====================================================
-        // VARIABLES PARA AUTENTICACIÓN (NUEVAS)
+        // VARIABLES PARA AUTENTICACIÓN
         // ====================================================
-        // Para entorno de pruebas - en producción usar credentials()
         ADMIN_PASSWORD = "admin1234"
         DB_SECRET_KEY  = "clave_secreta_123"
         PEPPER         = "pepper_secreto_456"
@@ -46,7 +45,7 @@ pipeline {
     // ── OPCIONES DEL PIPELINE ───────────────────────────────
     options {
         buildDiscarder(logRotator(numToKeepStr: "5"))
-        timeout(time: 10, unit: "MINUTES")  // Aumentado de 5 a 10 minutos
+        timeout(time: 10, unit: "MINUTES")
         timestamps()
         disableConcurrentBuilds()
     }
@@ -85,8 +84,22 @@ pipeline {
                     pip3 install --break-system-packages --no-cache-dir -r requirements.txt
                     mkdir -p ${REPORTS_DIR}
                     echo "Dependencias instaladas correctamente."
-                    echo "ADMIN_PASSWORD configurada: \${ADMIN_PASSWORD:0:1}***"  # Mostrar solo primer caracter
                 """
+                
+                // Verificar que las variables de entorno están configuradas
+                sh '''
+                    echo "Verificando variables de entorno:"
+                    if [ -n "$ADMIN_PASSWORD" ]; then
+                        echo "ADMIN_PASSWORD: [CONFIGURADA]"
+                    else
+                        echo "ADMIN_PASSWORD: [NO CONFIGURADA]"
+                    fi
+                    if [ -n "$DB_SECRET_KEY" ]; then
+                        echo "DB_SECRET_KEY: [CONFIGURADA]"
+                    else
+                        echo "DB_SECRET_KEY: [NO CONFIGURADA]"
+                    fi
+                '''
             }
         }
 
@@ -155,7 +168,6 @@ pipeline {
                 echo " Verificando Quality Gate de SonarQube..."
                 echo "============================================"
 
-                // Aumentado timeout para permitir procesamiento en SonarQube
                 timeout(time: 8, unit: "MINUTES") {
                     waitForQualityGate abortPipeline: true
                 }
@@ -196,9 +208,6 @@ pipeline {
             // Archivar reportes de pruebas
             archiveArtifacts artifacts: "${REPORTS_DIR}/**/*.xml", allowEmptyArchive: true
             archiveArtifacts artifacts: "${REPORTS_DIR}/**/*.html", allowEmptyArchive: true
-            
-            // Limpiar workspace opcionalmente
-            // cleanWs()
         }
 
         // Cuando el pipeline es exitoso
@@ -207,13 +216,6 @@ pipeline {
             echo "✅ EXITO: Todas las pruebas pasaron"
             echo "✅ El Quality Gate fue aprobado"
             echo "============================================"
-            
-            // Opcional: Enviar notificación por correo
-            // emailext(
-            //     subject: "Pipeline exitoso: ${env.JOB_NAME} - ${env.BUILD_NUMBER}",
-            //     body: "El pipeline ha finalizado exitosamente. Ver resultados en: ${env.BUILD_URL}",
-            //     to: "equipo@ejemplo.com"
-            // )
         }
 
         // Cuando el pipeline falla
@@ -225,16 +227,9 @@ pipeline {
             echo "🔍 Consulta SonarQube en: ${SONAR_HOST_URL}"
             echo "📊 Reportes de pruebas: ${REPORTS_DIR}/test_results.xml"
             echo "============================================"
-            
-            // Opcional: Enviar notificación por correo
-            // emailext(
-            //     subject: "Pipeline fallido: ${env.JOB_NAME} - ${env.BUILD_NUMBER}",
-            //     body: "El pipeline ha fallado. Revisa los logs en: ${env.BUILD_URL}",
-            //     to: "equipo@ejemplo.com"
-            // )
         }
 
-        // Cuando el pipeline es inestable (algunas pruebas fallaron pero no todas)
+        // Cuando el pipeline es inestable
         unstable {
             echo "============================================"
             echo "⚠️ INESTABLE: Algunas pruebas generaron advertencias"
