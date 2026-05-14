@@ -36,9 +36,9 @@ def db_path(tmp_path):
 
 @pytest.fixture
 def db_con_usuario(db_path):
-    """Base de datos con un estudiante y un admin pre-registrados."""
-    registrar_usuario("estudiante1", "Password123!", db_path, "estudiante")
-    registrar_usuario("admin", ADMIN_PASSWORD, db_path, "admin")
+    # Crear admin con contraseña conocida
+    registrar_usuario("admin", "admin1234", db_path, "admin")  # Usar la contraseña hardcodeada
+    registrar_usuario("estudiante1", "password123", db_path, "estudiante")
     return db_path
 
 
